@@ -37,6 +37,9 @@ export type CuratedMarket = {
   winningOutcome: 0 | 1 | null;
   aiScore?: number;  // AI curation score 0-100 (default: null = auto-accept)
   aiReason?: string; // AI explanation for the score
+  aiTitle?: string;  // AI-generated title (max 200 chars)
+  aiTags?: string[]; // AI-generated tags
+  aiSummary?: string; // AI-generated summary (max 500 chars)
   raw: GammaMarket;
 };
 
@@ -142,6 +145,42 @@ function parseAiScore(market: GammaMarket): { score: number; reason: string } | 
   return score >= 0 && score <= 100 ? { score, reason } : null;
 }
 
+function parseAiEnrichment(market: GammaMarket): { title: string; tags: string[]; summary: string } {
+  // Generate AI enrichment from Gamma market data
+  const outcomeTags = parseJsonArray(market.outcomes);
+  const prices = parseJsonArray(market.outcomePrices).map(Number);
+  const summaryLines: string[] = [];
+
+  // Build title from question (capped at 200 chars)
+  let title = market.question || "Untitled market";
+  if (title.length > 200) {
+    title = title.slice(0, 200) + "...";
+  }
+
+  // Build tags from outcomes (default to binary tags, cap at 5)
+  const tagsArray = outcomeTags.length > 0 ? outcomeTags : ["binary", "prediction"];
+  if (tagsArray.length > 5) {
+    tagsArray.length = 5;
+  }
+
+  // Build summary from price and key data points
+  if (prices.length >= 1 && Number.isFinite(prices[0])) {
+    const yesPrice = prices[0];
+    const yesBps = Math.round(yesPrice * 100);
+    summaryLines.push(`Outcome prices: YES ${yesBps}%, NO ${Math.round((100 - yesBps) * 100)}%`);
+  }
+  if (market.volume && Number.isFinite(Number(market.volume))) {
+    summaryLines.push(`Volume: $${Number(market.volume).toLocaleString()}`);
+  }
+  if (market.liquidity && Number.isFinite(Number(market.liquidity))) {
+    summaryLines.push(`Liquidity: $${Number(market.liquidity).toLocaleString()}`);
+  }
+
+  const summary = summaryLines.length > 0 ? summaryLines.join(" | ") : "No additional data available";
+
+  return { title, tags: tagsArray, summary };
+}
+
 export function normalizeMarket(market: GammaMarket, event?: GammaEvent): CuratedMarket | null {
   const id = market.id || market.conditionId || market.slug;
   if (!id) return null;
@@ -152,6 +191,7 @@ export function normalizeMarket(market: GammaMarket, event?: GammaEvent): Curate
   const aiResult = parseAiScore(market);
   const aiScore = aiResult?.score;
   const aiReason = aiResult?.reason;
+  const { title: aiTitle, tags: aiTags, summary: aiSummary } = parseAiEnrichment(market);
 
   return {
     polymarketId: String(id).slice(0, 64),
@@ -163,6 +203,9 @@ export function normalizeMarket(market: GammaMarket, event?: GammaEvent): Curate
     winningOutcome: winning,
     aiScore,
     aiReason,
+    aiTitle,
+    aiTags,
+    aiSummary,
     raw: market,
   };
 }
