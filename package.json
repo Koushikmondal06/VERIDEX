@@ -1,0 +1,21 @@
+{
+  "name": "veridex",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w @veridex/shared",
+    "build:indexer": "npm run build -w @veridex/indexer",
+    "build:oracle": "npm run build -w @veridex/oracle",
+    "build:web": "npm run build -w @veridex/web",
+    "dev:indexer": "npm run dev -w @veridex/indexer",
+    "dev:oracle": "npm run dev -w @veridex/oracle",
+    "dev:web": "npm run dev -w @veridex/web",
+    "build:ts": "npm run build:shared && npm run build:indexer && npm run build:oracle"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

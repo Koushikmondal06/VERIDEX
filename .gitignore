@@ -1,0 +1,17 @@
+node_modules/
+dist/
+target/
+.anchor/
+test-ledger/
+**/*.rs.bk
+.DS_Store
+.env
+.env.local
+apps/web/.env.local
+apps/*/data/
+data/*
+!data/fixtures/
+!data/fixtures/**
+*.log
+.vite/
+apps/web/public/markets.json

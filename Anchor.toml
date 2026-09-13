@@ -1,0 +1,15 @@
+[programs.localnet]
+veridex = "6cD9BZG2bddZZ1xoNReLVEvdYVaxpxY97F7MfZyov7XW"
+
+[programs.devnet]
+veridex = "6cD9BZG2bddZZ1xoNReLVEvdYVaxpxY97F7MfZyov7XW"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
