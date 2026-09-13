@@ -49,6 +49,7 @@ pub mod veridex {
         market.yes_supply = 0;
         market.no_supply = 0;
         market.lmsr_b = LMSR_B_DEFAULT;
+        market.ai_resolution_confidence = 100; // full confidence by default
         market.bump = ctx.bumps.market;
         market.vault_bump = ctx.bumps.vault;
 
@@ -247,7 +248,8 @@ pub mod veridex {
     }
 
     /// Oracle submits Polymarket resolution. `winning_outcome`: 0 = YES, 1 = NO.
-    pub fn resolve(ctx: Context<OracleOnly>, winning_outcome: u8) -> Result<()> {
+    /// `ai_resolution_confidence`: 0-100 confidence score from web search/QA.
+    pub fn resolve(ctx: Context<OracleOnly>, winning_outcome: u8, ai_resolution_confidence: u8) -> Result<()> {
         require!(winning_outcome <= 1, VeridexError::InvalidOutcome);
         let market = &mut ctx.accounts.market;
         require!(
@@ -264,6 +266,7 @@ pub mod veridex {
         }
         market.winning_outcome = Some(winning_outcome);
         market.status = MarketStatus::Resolved;
+        market.ai_resolution_confidence = ai_resolution_confidence;
         emit!(MarketResolved {
             market: market.key(),
             winning_outcome,
@@ -272,6 +275,7 @@ pub mod veridex {
     }
 
     /// Redeem winning shares 1:1 for USDC; losing shares worthless.
+    /// Requires AI resolution confidence >= threshold (default: 60/100).
     pub fn redeem(ctx: Context<Redeem>) -> Result<()> {
         require!(
             ctx.accounts.market.status == MarketStatus::Resolved,
@@ -282,6 +286,10 @@ pub mod veridex {
             .market
             .winning_outcome
             .ok_or(VeridexError::NotResolved)?;
+
+        // Phase 5: AI resolution QA — gate before payout
+        let confidence = ctx.accounts.market.ai_resolution_confidence;
+        require!(confidence >= 60, VeridexError::LowAiConfidence);
 
         let payout = match winning {
             0 => ctx.accounts.position.yes_shares,
@@ -348,12 +356,13 @@ pub struct Market {
     pub winning_outcome: Option<u8>,
     pub price_yes_bps: u16,
     pub price_no_bps: u16,
-    pub yes_supply: u64,
-    pub no_supply: u64,
+    yes_supply: u64,
+    no_supply: u64,
     pub bump: u8,
     pub vault_bump: u8,
     pub lmsr_b: u64,
     pub freeze_timestamp: i64,
+    pub ai_resolution_confidence: u8, // 0-100, set by oracle during resolve
 }
 
 impl Market {
@@ -374,6 +383,7 @@ impl Market {
         + 1
         + 1
         + 8; // lmsr_b
+        + 1; // ai_resolution_confidence
 }
 
 #[account]
@@ -604,6 +614,8 @@ pub enum VeridexError {
     CannotResolve,
     #[msg("Market not resolved")]
     NotResolved,
+    #[msg("AI resolution confidence too low (minimum 60/100)")]
+    LowAiConfidence,
     #[msg("Nothing to redeem")]
     NothingToRedeem,
     #[msg("Invalid USDC mint")]
