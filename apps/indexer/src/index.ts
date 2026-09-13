@@ -80,6 +80,14 @@ async function tick() {
     // Skip markets already past end
     if (m.endTs <= Math.floor(Date.now() / 1000)) continue;
 
+    // Phase 4: AI curation filter — skip markets with low AI score
+    const aiScore = m.aiScore ?? 50; // default neutral if no AI data
+    const aiReason = m.aiReason ?? "Auto-accepted (no AI data)";
+    if (aiScore < Number(process.env.AI_SCORE_THRESHOLD || 30)) {
+      console.log(`[indexer] AI filter: skipping ${m.polymarketId} (score=${aiScore}, reason=${aiReason})`);
+      continue;
+    }
+
     let pubkey: string | undefined;
     if (!DRY_RUN && cfg) {
       try {
