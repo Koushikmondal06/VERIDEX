@@ -12,16 +12,17 @@ Done:
 - Local USDC mint helper
 
 Still open for Phase 1:
-- End-to-end UI trade smoke test with wallet
-- Oracle freeze/resolve against a fixture market past `end_ts`
-- Replace stub IDL discriminators are now from `anchor build` (copied)
+- ~~End-to-end UI trade smoke test with wallet~~ → `scripts/smoke-lifecycle.ts`
+- Oracle freeze/resolve against Gamma (blocked offline; freeze/resolve covered in smoke)
+
+Phase 1 trading note: buy/sell are **1:1 USDC collateralized** so redeem cannot insolvent the vault. Polymarket odds are stored on-chain for display / LMSR seeding in Phase 2.
 
 ## MVP decisions (locked)
 
 | Decision | Choice |
 |---|---|
 | Markets | Binary only |
-| Pricing (Phase 1) | Fixed stub prices (no LMSR yet) |
+| Pricing (Phase 1) | 1:1 USDC collateral per share (odds stored; LMSR in Phase 2) |
 | Oracle | Single backend signer |
 | AI | Deferred to Phase 4–6 |
 | Network | Localnet / Solana Devnet |

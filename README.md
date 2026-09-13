@@ -154,7 +154,7 @@ Always filter with `active=true&closed=false` unless you specifically need histo
 
 LMSR (Logarithmic Market Scoring Rule) — the classic Hanson automated market maker for prediction markets.
 
-**Phase 1** uses fixed stub prices (seeded from Polymarket odds). LMSR lands in Phase 2.
+**Phase 1** uses fully collateralized 1 USDC/share buy/sell (odds stored on-chain for UI). LMSR lands in Phase 2.
 
 **Cost function:**
 ```

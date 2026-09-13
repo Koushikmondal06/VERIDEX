@@ -4,7 +4,6 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 declare_id!("6cD9BZG2bddZZ1xoNReLVEvdYVaxpxY97F7MfZyov7XW");
 
 pub const SHARE_DECIMALS: u8 = 6;
-pub const BPS_DENOM: u64 = 10_000;
 
 #[program]
 pub mod veridex {
@@ -58,7 +57,9 @@ pub mod veridex {
         Ok(())
     }
 
-    /// Buy YES or NO shares at fixed stub price. `outcome`: 0 = YES, 1 = NO.
+    /// Buy YES or NO shares. Phase 1: fully collateralized at 1 USDC per share
+    /// so redeem stays solvent. `price_*_bps` is stored for UI / LMSR later.
+    /// `outcome`: 0 = YES, 1 = NO.
     pub fn buy(ctx: Context<Trade>, outcome: u8, share_amount: u64) -> Result<()> {
         require!(share_amount > 0, VeridexError::ZeroAmount);
         let market = &mut ctx.accounts.market;
@@ -67,19 +68,10 @@ pub mod veridex {
             Clock::get()?.unix_timestamp < market.end_ts,
             VeridexError::PastEndTs
         );
+        require!(outcome <= 1, VeridexError::InvalidOutcome);
 
-        let price_bps = match outcome {
-            0 => market.price_yes_bps as u64,
-            1 => market.price_no_bps as u64,
-            _ => return err!(VeridexError::InvalidOutcome),
-        };
-
-        // cost = shares * price_bps / 10000 (both in 6-decimal micro units)
-        let cost = share_amount
-            .checked_mul(price_bps)
-            .and_then(|v| v.checked_div(BPS_DENOM))
-            .ok_or(VeridexError::MathOverflow)?;
-        require!(cost > 0, VeridexError::ZeroAmount);
+        // Phase 1 stub: 1:1 collateral (not price*shares) until LMSR
+        let cost = share_amount;
 
         token::transfer(
             CpiContext::new(
@@ -136,7 +128,7 @@ pub mod veridex {
         Ok(())
     }
 
-    /// Sell YES or NO shares back at fixed stub price.
+    /// Sell YES or NO shares back 1:1 for USDC (Phase 1 stub).
     pub fn sell(ctx: Context<Trade>, outcome: u8, share_amount: u64) -> Result<()> {
         require!(share_amount > 0, VeridexError::ZeroAmount);
         require!(
@@ -147,18 +139,9 @@ pub mod veridex {
             Clock::get()?.unix_timestamp < ctx.accounts.market.end_ts,
             VeridexError::PastEndTs
         );
+        require!(outcome <= 1, VeridexError::InvalidOutcome);
 
-        let price_bps = match outcome {
-            0 => ctx.accounts.market.price_yes_bps as u64,
-            1 => ctx.accounts.market.price_no_bps as u64,
-            _ => return err!(VeridexError::InvalidOutcome),
-        };
-
-        let proceeds = share_amount
-            .checked_mul(price_bps)
-            .and_then(|v| v.checked_div(BPS_DENOM))
-            .ok_or(VeridexError::MathOverflow)?;
-        require!(proceeds > 0, VeridexError::ZeroAmount);
+        let proceeds = share_amount;
 
         match outcome {
             0 => require!(

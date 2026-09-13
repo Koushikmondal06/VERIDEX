@@ -269,11 +269,12 @@ export default function App() {
         <section className="stage">
           {active ? (
             <>
-              <p className="eyebrow">Stub pricing · Phase 1</p>
+              <p className="eyebrow">Phase 1 · 1:1 collateral stub</p>
               <h1>{active.question}</h1>
               <p className="meta">
-                Ends {new Date(active.endTs * 1000).toLocaleString()} · YES{" "}
-                {yesPrice.toFixed(1)}¢ / NO {noPrice.toFixed(1)}¢
+                Ends {new Date(active.endTs * 1000).toLocaleString()} · displayed
+                odds YES {yesPrice.toFixed(1)}¢ / NO {noPrice.toFixed(1)}¢ · trade
+                cost 1 USDC per share until LMSR
               </p>
 
               <div className="trade">
