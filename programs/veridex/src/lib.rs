@@ -233,7 +233,13 @@ pub mod veridex {
             Clock::get()?.unix_timestamp >= market.end_ts,
             VeridexError::TooEarlyToFreeze
         );
+        require!(market.status != MarketStatus::Frozen, VeridexError::AlreadyFrozen);
+        // Production timing: freeze window is [end_ts, end_ts + 48h]
+        let now = Clock::get()?.unix_timestamp;
+        let max_freeze = market.end_ts + 48 * 3600;
+        require!(now <= max_freeze, VeridexError::TooLateToFreeze);
         market.status = MarketStatus::Frozen;
+        market.freeze_timestamp = Clock::get()?.unix_timestamp;
         emit!(MarketFrozen {
             market: market.key(),
         });
@@ -323,10 +329,11 @@ pub struct Config {
     pub oracle: Pubkey,
     pub usdc_mint: Pubkey,
     pub bump: u8,
+    pub total_fees: u64,
 }
 
 impl Config {
-    pub const LEN: usize = 8 + 32 + 32 + 32 + 1;
+    pub const LEN: usize = 8 + 32 + 32 + 32 + 1 + 8; // total_fees
 }
 
 #[account]
@@ -346,6 +353,7 @@ pub struct Market {
     pub bump: u8,
     pub vault_bump: u8,
     pub lmsr_b: u64,
+    pub freeze_timestamp: i64,
 }
 
 impl Market {
@@ -586,6 +594,10 @@ pub enum VeridexError {
     InsufficientShares,
     #[msg("Too early to freeze (before end_ts)")]
     TooEarlyToFreeze,
+    #[msg("Market already frozen")]
+    AlreadyFrozen,
+    #[msg("Too late to freeze (beyond 48h window)")]
+    TooLateToFreeze,
     #[msg("Too early to resolve")]
     TooEarlyToResolve,
     #[msg("Cannot resolve market in current status")]
