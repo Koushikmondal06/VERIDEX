@@ -10,6 +10,7 @@ import {
   SYSVAR_RENT_PUBKEY,
 } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { LMSR_B_DEFAULT } from "@veridex/shared";
 import type { CuratedMarket } from "@veridex/shared";
 import idl from "./idl/veridex.json" with { type: "json" };
 

@@ -1,15 +1,18 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
+use std::f64::consts::E;
 
 declare_id!("6cD9BZG2bddZZ1xoNReLVEvdYVaxpxY97F7MfZyov7XW");
 
 pub const SHARE_DECIMALS: u8 = 6;
 
+pub const LMSR_B_DEFAULT: u64 = 1_000_000;
+
 #[program]
 pub mod veridex {
     use super::*;
 
-    /// Initialize global config (indexer authority + oracle).
+/// Initialize global config (indexer authority + oracle).
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let config = &mut ctx.accounts.config;
         config.authority = ctx.accounts.authority.key();
@@ -45,6 +48,7 @@ pub mod veridex {
         market.price_no_bps = 10_000 - price_yes_bps;
         market.yes_supply = 0;
         market.no_supply = 0;
+        market.lmsr_b = LMSR_B_DEFAULT;
         market.bump = ctx.bumps.market;
         market.vault_bump = ctx.bumps.vault;
 
@@ -57,8 +61,8 @@ pub mod veridex {
         Ok(())
     }
 
-    /// Buy YES or NO shares. Phase 1: fully collateralized at 1 USDC per share
-    /// so redeem stays solvent. `price_*_bps` is stored for UI / LMSR later.
+    /// Buy YES or NO shares using LMSR bonding curve.
+    /// cost = b * (e^(shares/B) - 1) approximately, exact via log sum.
     /// `outcome`: 0 = YES, 1 = NO.
     pub fn buy(ctx: Context<Trade>, outcome: u8, share_amount: u64) -> Result<()> {
         require!(share_amount > 0, VeridexError::ZeroAmount);
@@ -70,8 +74,18 @@ pub mod veridex {
         );
         require!(outcome <= 1, VeridexError::InvalidOutcome);
 
-        // Phase 1 stub: 1:1 collateral (not price*shares) until LMSR
-        let cost = share_amount;
+        // LMSR: cost = b * (ln(new_yes) + ln(new_no) - ln(old_yes) - ln(old_no))
+        // where s+1 smoothing avoids ln(0) for initial shares.
+        let b = market.lmsr_b as f64;
+        let old_yes = market.yes_supply as f64 + 1.0;
+        let old_no = market.no_supply as f64 + 1.0;
+        let (new_yes, new_no) = if outcome == 0 {
+            (market.yes_supply as f64 + 1.0 + (share_amount as f64), market.no_supply as f64 + 1.0)
+        } else {
+            (market.yes_supply as f64 + 1.0, market.no_supply as f64 + 1.0 + (share_amount as f64))
+        };
+        let cost = (b * (new_yes.ln() + new_no.ln() - old_yes - old_no)) as u64;
+        require!(cost > 0, VeridexError::ZeroAmount);
 
         token::transfer(
             CpiContext::new(
@@ -128,20 +142,34 @@ pub mod veridex {
         Ok(())
     }
 
-    /// Sell YES or NO shares back 1:1 for USDC (Phase 1 stub).
+    /// Sell shares back using LMSR bonding curve.
+    /// Returns `proceeds` USDC; shares burned, supply decreases.
+    /// `outcome`: 0 = YES, 1 = NO.
     pub fn sell(ctx: Context<Trade>, outcome: u8, share_amount: u64) -> Result<()> {
         require!(share_amount > 0, VeridexError::ZeroAmount);
+        let market = &mut ctx.accounts.market;
         require!(
-            ctx.accounts.market.status == MarketStatus::Open,
+            market.status == MarketStatus::Open,
             VeridexError::MarketNotOpen
         );
         require!(
-            Clock::get()?.unix_timestamp < ctx.accounts.market.end_ts,
+            Clock::get()?.unix_timestamp < market.end_ts,
             VeridexError::PastEndTs
         );
         require!(outcome <= 1, VeridexError::InvalidOutcome);
 
-        let proceeds = share_amount;
+        // LMSR: selling decreases supply, gets USDC via reverse pricing
+        // Use +1 smoothing to avoid ln(0).
+        let b = market.lmsr_b as f64;
+        let old_yes = market.yes_supply as f64 + 1.0;
+        let old_no = market.no_supply as f64 + 1.0;
+        let (new_yes, new_no) = if outcome == 0 {
+            (market.yes_supply as f64 + 1.0 - (share_amount as f64), market.no_supply as f64 + 1.0)
+        } else {
+            (market.yes_supply as f64 + 1.0, market.no_supply as f64 + 1.0 - (share_amount as f64))
+        };
+        let proceeds = (b * (new_yes.ln() + new_no.ln() - old_yes - old_no)) as u64;
+        require!(proceeds > 0, VeridexError::ZeroAmount);
 
         match outcome {
             0 => require!(
@@ -317,6 +345,7 @@ pub struct Market {
     pub no_supply: u64,
     pub bump: u8,
     pub vault_bump: u8,
+    pub lmsr_b: u64,
 }
 
 impl Market {
@@ -335,7 +364,8 @@ impl Market {
         + 8
         + 8
         + 1
-        + 1;
+        + 1
+        + 8; // lmsr_b
 }
 
 #[account]

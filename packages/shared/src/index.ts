@@ -1,5 +1,7 @@
 export const GAMMA_BASE = "https://gamma-api.polymarket.com";
 
+export const LMSR_B_DEFAULT = 1_000_000;
+
 export type GammaMarket = {
   id: string;
   question?: string;
@@ -30,6 +32,7 @@ export type CuratedMarket = {
   question: string;
   endTs: number;
   priceYesBps: number;
+  lmsr_b?: number;  // LMSR bonding curve parameter (default: 1_000_000)
   closed: boolean;
   winningOutcome: 0 | 1 | null;
   raw: GammaMarket;
@@ -78,18 +81,32 @@ function parsePrices(market: GammaMarket): { yesBps: number; winning: 0 | 1 | nu
   return { yesBps, winning };
 }
 
+function parseLmsrB(market: GammaMarket): number {
+  // Derive LMSR b parameter from Gamma market liquidity
+  let liquidity = 0;
+  if (market.liquidity && Number.isFinite(Number(market.liquidity))) {
+    liquidity = Math.max(1, Number(market.liquidity));
+  }
+  // Scale: larger liquidity → larger b (deeper market)
+  // b = 1_000_000 * (liquidity / 1_000_000 + 1), capped at 10_000_000
+  const b = 1_000_000 * Math.min(10, liquidity / 1_000_000 + 1);
+  return Math.round(b);
+}
+
 export function normalizeMarket(market: GammaMarket, event?: GammaEvent): CuratedMarket | null {
   const id = market.id || market.conditionId || market.slug;
   if (!id) return null;
 
   const question = (market.question || event?.title || "Untitled market").slice(0, 200);
   const { yesBps, winning } = parsePrices(market);
+  const lmsr_b = parseLmsrB(market);
 
   return {
     polymarketId: String(id).slice(0, 64),
     question,
     endTs: parseEndTs(market, event),
     priceYesBps: yesBps,
+    lmsr_b,
     closed: Boolean(market.closed),
     winningOutcome: winning,
     raw: market,
