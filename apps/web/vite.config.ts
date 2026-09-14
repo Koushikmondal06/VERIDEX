@@ -25,11 +25,10 @@ export default defineConfig({
       'buffer',
     ],
   },
-  // Fix Buffer is not defined error
+  // Simplified define - just NODE_ENV
   define: {
     'process.env.NODE_ENV': JSON.stringify('production'),
   },
-  // Handle buffer polyfill
   resolve: {
     alias: {
       'buffer': 'buffer',
