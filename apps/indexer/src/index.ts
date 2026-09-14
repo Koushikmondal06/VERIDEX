@@ -9,6 +9,14 @@ import {
   type GammaMarket,
 } from "@veridex/shared";
 import { loadConfig, createMarketOnChain, ensureInitialized } from "./solana.js";
+import {
+  marketExists,
+  storeMarket,
+  getAllMarkets,
+  getMarketById,
+  updateMarketStatus,
+  getMarketCount,
+} from "./db.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const DATA_DIR = path.resolve(process.env.VERIDEX_DATA_DIR || path.join(REPO_ROOT, "data"));
@@ -62,8 +70,10 @@ function saveStore(store: Record<string, StoredMarket>) {
 
 async function tick() {
   console.log(`[indexer] polling Gamma (limit=${LIMIT_EVENTS})…`);
+  
+  // Check which markets already exist in database to reduce Gamma calls
   const markets = await loadMarkets();
-  console.log(`[indexer] found ${markets.length} binary markets`);
+  console.log(`[indexer] found ${markets.length} binary markets from Gamma`);
 
   const store = loadStore();
   let created = 0;
@@ -74,6 +84,12 @@ async function tick() {
   }
 
   for (const m of markets) {
+    // Skip if market already exists in database (reduces Gamma API dependency)
+    if (await marketExists(m.polymarketId)) {
+      console.log(`[indexer] skipping ${m.polymarketId} - already in DB`);
+      continue;
+    }
+    
     if (store[m.polymarketId]) continue;
     if (created >= MAX_CREATE) break;
 
@@ -93,6 +109,28 @@ async function tick() {
       try {
         pubkey = await createMarketOnChain(cfg, m);
         console.log(`[indexer] created on-chain ${m.polymarketId} → ${pubkey}`);
+        
+        // Store in database to reduce future Gamma calls
+        const storedMarket: StoredMarket = {
+          polymarketId: m.polymarketId,
+          question: m.question,
+          endTs: m.endTs,
+          priceYesBps: m.priceYesBps,
+          lmsr_b: m.lmsr_b,
+          closed: false,
+          winningOutcome: null,
+          aiScore: m.aiScore,
+          aiReason: m.aiReason,
+          aiTitle: m.aiTitle,
+          aiTags: m.aiTags,
+          aiSummary: m.aiSummary,
+          raw: m as any,
+          pubkey,
+          status: "open",
+          createdAt: new Date().toISOString(),
+        };
+        await storeMarket(storedMarket);
+        console.log(`[indexer] stored ${m.polymarketId} in database`);
       } catch (err) {
         console.error(`[indexer] create failed for ${m.polymarketId}:`, err);
         continue;
@@ -108,6 +146,19 @@ async function tick() {
       createdAt: new Date().toISOString(),
     };
     created += 1;
+  }
+
+  // Sync database with web store
+  const dbMarkets = await getAllMarkets();
+  for (const dbMarket of dbMarkets) {
+    if (!store[dbMarket.polymarketId]) {
+      store[dbMarket.polymarketId] = {
+        ...dbMarket,
+        status: dbMarket.status as any,
+        pubkey: dbMarket.pubkey,
+        createdAt: dbMarket.createdAt,
+      };
+    }
   }
 
   saveStore(store);

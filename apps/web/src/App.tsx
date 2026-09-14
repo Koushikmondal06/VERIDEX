@@ -62,7 +62,7 @@ export default function App() {
 
   const loadMarkets = useCallback(async () => {
     try {
-      const res = await fetch("/markets.json", { cache: "no-store" });
+      const res = await fetch("/api/markets", { cache: "no-store" });
       if (!res.ok) {
         setMarkets([]);
         return;
@@ -179,7 +179,7 @@ export default function App() {
           tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
         })
-        .rpc();
+        .rc();
 
       setMsg(`${side.toUpperCase()} ${outcome === 0 ? "YES" : "NO"} confirmed`);
       await refreshPosition();
@@ -209,7 +209,7 @@ export default function App() {
           userUsdc,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
-        .rpc();
+        .rc();
       setMsg("Redeemed winning shares");
       await refreshPosition();
     } catch (err) {
@@ -242,9 +242,7 @@ export default function App() {
           </div>
           {markets.length === 0 ? (
             <p className="empty">
-              No markets yet. Run the indexer (`DRY_RUN=1 npm run once -w
-              @veridex/indexer`) then copy `data/markets.json` to
-              `apps/web/public/markets.json`.
+              No markets yet. Run the indexer (`DRY_RUN=1 npx tsx scripts/smoke-lifecycle.ts`) or use the admin portal to create markets.
             </p>
           ) : (
             <ul className="market-list">
