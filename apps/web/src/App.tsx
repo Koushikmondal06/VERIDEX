@@ -179,7 +179,7 @@ export default function App() {
           tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
         })
-        .rc();
+        .rpc();
 
       setMsg(`${side.toUpperCase()} ${outcome === 0 ? "YES" : "NO"} confirmed`);
       await refreshPosition();
@@ -209,7 +209,7 @@ export default function App() {
           userUsdc,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
-        .rc();
+        .rpc();
       setMsg("Redeemed winning shares");
       await refreshPosition();
     } catch (err) {

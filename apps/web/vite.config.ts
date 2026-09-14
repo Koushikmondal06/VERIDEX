@@ -18,4 +18,21 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    include: [
+      '@solana/web3.js',
+      '@solana/spl-token',
+      'buffer',
+    ],
+  },
+  // Fix Buffer is not defined error
+  define: {
+    'process.env.NODE_ENV': JSON.stringify('production'),
+  },
+  // Handle buffer polyfill
+  resolve: {
+    alias: {
+      'buffer': 'buffer',
+    },
+  },
 })
